@@ -64,6 +64,7 @@ sub new {
 
   if(defined($param_hash->{isoform})) {
     my $disease = $param_hash->{isoform};
+    $default_output->{'neXtProt_url'} = 1;
     $self->{isoform} = $disease;
   }
 
@@ -129,6 +130,7 @@ sub run {
   # print "AFTER: ", Dumper($output);
 
   my %result_hash;
+  my %result_hash_final;
 
   # Output format: 'iso','spos','epos','annot_type','callret-4'
   # 'iso' -> isoform URL to neXtProt page; 'spos' -> start position; 'epos' -> end position; 'annot_type' -> annotation type (e.g. PdbMapping, Variant, etc.);
@@ -151,7 +153,8 @@ sub run {
 
     # There is only one URL
     if($self->{isoform} && !$result_hash{'neXtProt_url'}) {
-      $result_hash{'neXtProt_url'} = $isoform_url;
+      my @isoform_value = ($isoform_url);
+      $result_hash{'neXtProt_url'} = \@isoform_value;
     }
 
     # Some annot_type have more than one value
@@ -170,12 +173,14 @@ sub run {
   }
 
   foreach my $key (keys %result_hash) {
-    my $data_to_return = $result_hash{$key};
-    my $join_data = join('|', @$data_to_return);
-    $result_hash{$key} = $join_data;
+      if($default_output->{$key}) {
+      my $data_to_return = $result_hash{$key};
+      my $join_data = join('|', @$data_to_return);
+      $result_hash_final{$key} = $join_data;
+    }
   }
 
-  return \%result_hash;
+  return \%result_hash_final;
 }
 
 sub get_sparql_query {
