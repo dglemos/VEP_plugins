@@ -23,12 +23,12 @@ limitations under the License.
 
 =head1 NAME
 
- FATHMM
+ neXtProt
 
 =head1 SYNOPSIS
 
  mv neXtProt.pm ~/.vep/Plugins
- ./vep -i variations.vcf --plugin FATHMM,"python /path/to/fathmm/fathmm.py"
+ ./vep -i variations.vcf --plugin neXtProt
 
 =head1 DESCRIPTION
 
