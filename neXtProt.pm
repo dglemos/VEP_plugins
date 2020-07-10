@@ -172,11 +172,14 @@ sub run {
     }
   }
 
-  foreach my $key (keys %result_hash) {
-      if($default_output->{$key}) {
+  foreach my $key (keys %$default_output) {
+    if($result_hash{$key}) {
       my $data_to_return = $result_hash{$key};
       my $join_data = join('|', @$data_to_return);
       $result_hash_final{$key} = $join_data;
+    }
+    else {
+      $result_hash_final{$key} = '-';
     }
   }
 
