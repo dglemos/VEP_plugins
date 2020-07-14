@@ -48,7 +48,7 @@ use base qw(Bio::EnsEMBL::Variation::Utils::BaseVepPlugin);
 
 my $default_output = {
   neXtProt_MatureProtein => 1,
-  neXtProt_PdbMapping => 1,
+  neXtProt_NucleotidePhosphateBindingRegion => 1,
   neXtProt_Variant => 1,
   neXtProt_Domain => 1,
   neXtProt_MiscellaneousRegion => 1,
@@ -89,15 +89,19 @@ sub get_header_info {
   # 'neXtProt_SequenceConflict' => 'Sequence discrepancies of unknown origin',
   # 'neXtProt_TransmembraneRegion' => 'Extent of a membrane-spanning region',
   # 'neXtProt_CompositionallyBiasedRegion' => 'Region of compositional bias in the protein',
-  # 'neXtProt_MiscellaneousRegion' => 'Region of interest in the sequence',
-  # 'neXtProt_NucleotidePhosphateBindingRegion' => 'Nucleotide phosphate binding region',
   # 'neXtProt_ModifiedResidue' => 'Modified residues',
   # 'neXtProt_Repeat' => 'Positions of repeated sequence motifs or repeated domains',
   # 'neXtProt_Mutagenesis' => 'Site which has been experimentally altered by mutagenesis',
   # 'neXtProt_ModifiedResidue' => 'Modified residues',
+  # $header{'neXtProt_PdbMapping'} = 'Protein 3D structure';
+  # DisulfideBond
+  # GlycosylationSite
+  # neXtProt_DisulfideBond -> 152,177,Or C-152 with C-183
+  # neXtProt_GlycosylationSite -> 167,167,O-linked (GalNAc...) threonine
+  # neXtProt_CompositionallyBiasedRegion -> 671,677,Gly/Ser-rich
 
   $header{'neXtProt_MatureProtein'} = 'Extent of an active peptide or a polypetide chain in the mature protein';
-  $header{'neXtProt_PdbMapping'} = 'Protein 3D structure';
+  $header{'neXtProt_NucleotidePhosphateBindingRegion'} = 'Nucleotide phosphate binding region';
   $header{'neXtProt_Variant'} = 'Natural variant of the protein';
   $header{'neXtProt_Domain'} = 'Position and type of each modular protein domain';
   $header{'neXtProt_MiscellaneousRegion'} = 'Region of interest in the sequence';
@@ -172,16 +176,23 @@ sub run {
     }
   }
 
-  foreach my $key (keys %$default_output) {
-    if($result_hash{$key}) {
-      my $data_to_return = $result_hash{$key};
-      my $join_data = join('|', @$data_to_return);
-      $result_hash_final{$key} = $join_data;
-    }
-    else {
-      $result_hash_final{$key} = '-';
-    }
+  foreach my $key (keys %result_hash) {
+    my $data_to_return = $result_hash{$key};
+    my $join_data = join('|', @$data_to_return);
+    $result_hash_final{$key} = $join_data;
+    # print $key, " -> ", $join_data, "\n";
   }
+
+  # foreach my $key (keys %$default_output) {
+  #   if($result_hash{$key}) {
+  #     my $data_to_return = $result_hash{$key};
+  #     my $join_data = join('|', @$data_to_return);
+  #     $result_hash_final{$key} = $join_data;
+  #   }
+  #   else {
+  #     $result_hash_final{$key} = '-';
+  #   }
+  # }
 
   return \%result_hash_final;
 }
@@ -196,7 +207,7 @@ sub get_sparql_query {
                select distinct ?iso ?spos ?epos ?annot_type str(?txt)
                where {
                  values ?poi {$peptide_start}
-                 values ?ensp {'$transcript_id'}
+                 values ?ensp {'$transcript_id'} # for e101 mapping is for canoncila - somtimes our cnonincal is different than the uniprot canonical
                  bind (IRI(CONCAT('http://rdf.ebi.ac.uk/resource/ensembl.protein/',?ensp)) as ?ENSP_IRI)
                  SERVICE <http://sparql.uniprot.org/sparql> {
                    SELECT * WHERE {
