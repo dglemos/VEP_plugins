@@ -47,11 +47,27 @@ limitations under the License.
  The plugin can also be run with other options to retrieve other data than the default.
  
  Options are passed to the plugin as key=value pairs:
- max_set        : Returns a bigger set of protein-related data (includes the default data)
+ max_set        : Set value to 1 to return a bigger set of protein-related data 
+                  (includes the default data)
 
- config_data    : List of data speficied by the user
+ config_data    : The set of data can be configured by the user. Use file 'neXtProt_headers.txt'
+                  to check which data (labels) are available.
 
- url            : URL to link to a neXtProt entry
+ url            : Set value to 1 to include the URL to link to the neXtProt entry
+
+ all_labels     : Set value to 1 to include all data even if data was not found for all labels
+
+ * note: 'max_set' and 'config_data' cannot be used in simultaneously.
+
+
+ Output:
+  By default, the plugin only returns data that is available. Example (default behaviour):
+  neXtProt_Domain=396,583,DH;neXtProt_MatureProtein=1,1344,Rho guanine nucleotide exchange factor 10
+
+  The option 'all_labels' includes all data, same example as above:
+  neXtProt_Domain=396,583,DH;neXtProt_MatureProtein=1,1344,Rho guanine nucleotide exchange factor 10;
+  neXtProt_InteractingRegion=-;neXtProt_NucleotidePhosphateBindingRegion=-;neXtProt_Variant=-;
+  neXtProt_MiscellaneousRegion=-;
 
 
  The plugin can then be run as default:
@@ -83,7 +99,6 @@ my $default_output = {
 };
 
 my $max_set_output = {
-  'neXtProt_AntibodyMapping' => 'provides information as to whether an antibody mapping is “unique”, “pseudo-unique” or “not unique” in a manner analogous to that of peptide mappings',
   'neXtProt_TopologicalDomain' => 'Location of non-membrane regions of membrane-spanning proteins',
   'neXtProt_SequenceConflict' => 'Sequence discrepancies of unknown origin',
   'neXtProt_TransmembraneRegion' => 'Extent of a membrane-spanning region',
@@ -92,7 +107,6 @@ my $max_set_output = {
   'neXtProt_Repeat' => 'Positions of repeated sequence motifs or repeated domains',
   'neXtProt_Mutagenesis' => 'Site which has been experimentally altered by mutagenesis',
   'neXtProt_DisulfideBond' => 'Cysteine residues participating in disulfide bonds',
-  'neXtProt_PdbMapping' => 'Protein 3D structure',
   'neXtProt_GlycosylationSite' => 'Covalently attached glycan group(s)',
   'neXtProt_ZincFingerRegion' => 'Position(s) and type(s) of zinc fingers within the protein',
   'neXtProt_DnaBindingRegion' => 'Position and type of a DNA-binding domain',
@@ -138,6 +152,10 @@ sub new {
   if(defined($param_hash->{config_data})) {
     $self->{config_data} = $param_hash->{config_data};
     $self->build_data_hash();
+  }
+
+  if(defined($param_hash->{all_labels})) {
+    $self->{all_labels} = $param_hash->{all_labels};
   }
 
   return $self;
@@ -257,7 +275,7 @@ sub run {
       my $join_data = join('|', @$data_to_return);
       $result_hash_final{$key} = $join_data;
     }
-    else {
+    elsif(!$result_hash{$key} && $self->{all_labels}) {
       $result_hash_final{$key} = '-';
     }
   }
@@ -297,7 +315,7 @@ sub get_sparql_query {
 
 sub build_data_hash {
   my $self = shift;
-  my $file = '/homes/dlemos/VEP_plugins/neXtProt_headers.txt';
+  my $file = 'neXtProt_headers.txt';
 
   my %headers_file_hash;
   my %output_hash;
