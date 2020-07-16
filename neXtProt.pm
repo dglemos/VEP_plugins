@@ -29,8 +29,37 @@ limitations under the License.
 
  mv neXtProt.pm ~/.vep/Plugins
  ./vep -i variations.vcf --plugin neXtProt
+ ./vep -i variations.vcf --plugin neXtProt,max_set=1
 
 =head1 DESCRIPTION
+
+ This is a plugin for the Ensembl Variant Effect Predictor (VEP) that
+ retrives data for missense variants from neXtProt, which is a comprehensive 
+ human-centric discovery platform that offers integration of and navigation 
+ through protein-related data (https://www.nextprot.org/).
+
+ Please cite the neXtProt publication alongside the VEP if you use this resource:
+ https://doi.org/10.1093/nar/gkz995
+ 
+ Running options:
+ (Default) the data retrieved by default is the MatureProtein, NucleotidePhosphateBindingRegion,
+ Variant, Domain, MiscellaneousRegion and InteractingRegion.
+ The plugin can also be run with other options to retrieve other data than the default.
+ 
+ Options are passed to the plugin as key=value pairs:
+ max_set        : Returns a bigger set of protein-related data (includes the default data)
+
+ config_data    : List of data speficied by the user
+
+ url            : URL to link to a neXtProt entry
+
+
+ The plugin can then be run as default:
+ ./vep -i variations.vcf --plugin neXtProt
+
+ or to return only the data specified by the user:
+ ./vep -i variations.vcf --plugin neXtProt,config_data='Domain&InteractingRegion'
+
 
 =cut
 
@@ -40,32 +69,75 @@ use strict;
 use warnings;
 use JSON::XS;
 
-use Data::Dumper;
-
 use Bio::EnsEMBL::Variation::Utils::BaseVepPlugin;
 
 use base qw(Bio::EnsEMBL::Variation::Utils::BaseVepPlugin);
 
 my $default_output = {
-  neXtProt_MatureProtein => 1,
-  neXtProt_NucleotidePhosphateBindingRegion => 1,
-  neXtProt_Variant => 1,
-  neXtProt_Domain => 1,
-  neXtProt_MiscellaneousRegion => 1,
-  neXtProt_InteractingRegion => 1
+  'neXtProt_MatureProtein' => 'Extent of an active peptide or a polypetide chain in the mature protein',
+  'neXtProt_NucleotidePhosphateBindingRegion' => 'Nucleotide phosphate binding region',
+  'neXtProt_Variant' => 'Natural variant of the protein',
+  'neXtProt_Domain' => 'Position and type of each modular protein domain',
+  'neXtProt_MiscellaneousRegion' => 'Region of interest in the sequence',
+  'neXtProt_InteractingRegion' => 'Region interacting with another macromolecule'
+};
+
+my $max_set_output = {
+  'neXtProt_AntibodyMapping' => 'provides information as to whether an antibody mapping is “unique”, “pseudo-unique” or “not unique” in a manner analogous to that of peptide mappings',
+  'neXtProt_TopologicalDomain' => 'Location of non-membrane regions of membrane-spanning proteins',
+  'neXtProt_SequenceConflict' => 'Sequence discrepancies of unknown origin',
+  'neXtProt_TransmembraneRegion' => 'Extent of a membrane-spanning region',
+  'neXtProt_CompositionallyBiasedRegion' => 'Region of compositional bias in the protein',
+  'neXtProt_ModifiedResidue' => 'Modified residues',
+  'neXtProt_Repeat' => 'Positions of repeated sequence motifs or repeated domains',
+  'neXtProt_Mutagenesis' => 'Site which has been experimentally altered by mutagenesis',
+  'neXtProt_DisulfideBond' => 'Cysteine residues participating in disulfide bonds',
+  'neXtProt_PdbMapping' => 'Protein 3D structure',
+  'neXtProt_GlycosylationSite' => 'Covalently attached glycan group(s)',
+  'neXtProt_ZincFingerRegion' => 'Position(s) and type(s) of zinc fingers within the protein',
+  'neXtProt_DnaBindingRegion' => 'Position and type of a DNA-binding domain',
+  'neXtProt_BindingSite' => 'Binding site for any chemical group (co-enzyme, prosthetic group, etc.)',
+  'neXtProt_MatureProtein' => 'Extent of an active peptide or a polypetide chain in the mature protein',
+  'neXtProt_NucleotidePhosphateBindingRegion' => 'Nucleotide phosphate binding region',
+  'neXtProt_Variant' => 'Natural variant of the protein',
+  'neXtProt_Domain' => 'Position and type of each modular protein domain',
+  'neXtProt_MiscellaneousRegion' => 'Region of interest in the sequence',
+  'neXtProt_InteractingRegion' => 'Region interacting with another macromolecule'
 };
 
 sub new {
   my $class = shift;
-  
+
   my $self = $class->SUPER::new(@_);
 
   my $param_hash = $self->params_to_hash();
 
-  if(defined($param_hash->{isoform})) {
-    my $disease = $param_hash->{isoform};
-    $default_output->{'neXtProt_url'} = 1;
-    $self->{isoform} = $disease;
+  if(defined($param_hash->{max_set}) && defined($param_hash->{config_data})) {
+    die "ERROR: Can't use max_set and config_data simultaneously!\n";
+  }
+
+  # Return the isoform URL to the neXtProt web page
+  if(defined($param_hash->{url})) {
+    $self->{url} = $param_hash->{url};
+
+    if(defined($param_hash->{max_set})) {
+      $max_set_output->{'neXtProt_url'} = 'neXtProt URL';
+    }
+    elsif(defined($param_hash->{config_data})) {
+      $self->{config_data_hash}->{'neXtProt_url'} = 'neXtProt URL';
+    }
+    else {
+      $default_output->{'neXtProt_url'} = 'neXtProt URL';
+    }
+  }
+
+  if(defined($param_hash->{max_set})) {
+    $self->{max_set} = $param_hash->{max_set};
+  }
+
+  if(defined($param_hash->{config_data})) {
+    $self->{config_data} = $param_hash->{config_data};
+    $self->build_data_hash();
   }
 
   return $self;
@@ -80,32 +152,21 @@ sub get_header_info {
 
   my %header;
 
-  if($self->{isoform}) {
-    $header{'neXtProt_url'} = 'neXtProt URL';
+  if($self->{max_set}) {
+    foreach my $value (keys $max_set_output) {
+      $header{$value} = $max_set_output->{$value};
+    }
   }
-
-  # 'neXtProt_AntibodyMapping' => 'provides information as to whether an antibody mapping is “unique”, “pseudo-unique” or “not unique” in a manner analogous to that of peptide mappings',
-  # 'neXtProt_TopologicalDomain' => 'Location of non-membrane regions of membrane-spanning proteins',
-  # 'neXtProt_SequenceConflict' => 'Sequence discrepancies of unknown origin',
-  # 'neXtProt_TransmembraneRegion' => 'Extent of a membrane-spanning region',
-  # 'neXtProt_CompositionallyBiasedRegion' => 'Region of compositional bias in the protein',
-  # 'neXtProt_ModifiedResidue' => 'Modified residues',
-  # 'neXtProt_Repeat' => 'Positions of repeated sequence motifs or repeated domains',
-  # 'neXtProt_Mutagenesis' => 'Site which has been experimentally altered by mutagenesis',
-  # 'neXtProt_ModifiedResidue' => 'Modified residues',
-  # $header{'neXtProt_PdbMapping'} = 'Protein 3D structure';
-  # DisulfideBond
-  # GlycosylationSite
-  # neXtProt_DisulfideBond -> 152,177,Or C-152 with C-183
-  # neXtProt_GlycosylationSite -> 167,167,O-linked (GalNAc...) threonine
-  # neXtProt_CompositionallyBiasedRegion -> 671,677,Gly/Ser-rich
-
-  $header{'neXtProt_MatureProtein'} = 'Extent of an active peptide or a polypetide chain in the mature protein';
-  $header{'neXtProt_NucleotidePhosphateBindingRegion'} = 'Nucleotide phosphate binding region';
-  $header{'neXtProt_Variant'} = 'Natural variant of the protein';
-  $header{'neXtProt_Domain'} = 'Position and type of each modular protein domain';
-  $header{'neXtProt_MiscellaneousRegion'} = 'Region of interest in the sequence';
-  $header{'neXtProt_InteractingRegion'} = 'Region interacting with another macromolecule';
+  elsif($self->{config_data}) {
+    foreach my $value (keys $self->{config_data_hash}) {
+      $header{$value} = $self->{config_data_hash}->{$value};
+    }
+  }
+  else {
+    foreach my $value (keys %$default_output) {
+      $header{$value} = $default_output->{$value};
+    }
+  }
 
   return \%header;
 }
@@ -113,25 +174,25 @@ sub get_header_info {
 sub run {
   my ($self, $tva) = @_;
 
-  return {} unless $tva->transcript->translation;
+  return {} unless grep {$_->SO_term =~ 'missense_variant'} @{$tva->get_all_OverlapConsequences};
   my $tv = $tva->transcript_variation;
 
   my $peptide_start = defined($tv->translation_start) ? $tv->translation_start : undef;
   my $peptide_end = defined($tv->translation_end) ? $tv->translation_end : undef;
   my $transcript_id = $tva->transcript->translation->stable_id;
 
-  return {} unless defined($transcript_id) && defined($peptide_start) && defined($peptide_end); 
-
-  # print "\n$transcript_id, $peptide_start, $peptide_end\n";
+  return {} unless defined($transcript_id) && defined($peptide_start) && defined($peptide_end);
 
   my $query = $self->get_sparql_query($peptide_start,$transcript_id);
 
-  # run command
-  my $query_output = `curl -X POST -H "Accept:application/sparql-results+json" --data-urlencode "query=$query" https://sparql.nextprot.org/ 2> /dev/null`;
+  # run SPARQL query
+  my $query_output;
+  eval {
+    $query_output = `curl -X POST -H "Accept:application/sparql-results+json" --data-urlencode "query=$query" https://sparql.nextprot.org/ 2> /dev/null`;
+  };
+  warn $@ if $@;
 
   my $output = decode_json ($query_output);
-
-  # print "AFTER: ", Dumper($output);
 
   my %result_hash;
   my %result_hash_final;
@@ -149,50 +210,57 @@ sub run {
     my $annot_type = $results->{annot_type}->{value};
     $annot_type =~ s/.*#//;
     my $data = $results->{'callret-4'}->{value};
-    # PdbMapping values contain ';'
-    if($data =~ /; /) {
-      $data =~ s/; / /g;
+    # PdbMapping and Variant values contain ';'
+    if($data =~ /;/) {
+      if($annot_type eq 'Variant') { 
+        $data =~ s/;/\./g; 
+      }
+      else {
+        $data =~ s/;//g;
+      }
     }
     $data =~ s/\.$//;
 
     # There is only one URL
-    if($self->{isoform} && !$result_hash{'neXtProt_url'}) {
+    if($self->{url} && !$result_hash{'neXtProt_url'}) {
       my @isoform_value = ($isoform_url);
       $result_hash{'neXtProt_url'} = \@isoform_value;
     }
 
     # Some annot_type have more than one value
-    # Need to check if it's not duplicate
+    # Need to check if it's not duplicated
     if($result_hash{'neXtProt_'.$annot_type}) {
-      # $result_hash{'neXtProt_'.$annot_type} .= "|".$start_pos.','.$end_pos.','.$data;
       my $annot_type_data = $start_pos.','.$end_pos.','.$data;
       push @{$result_hash{'neXtProt_'.$annot_type}}, $annot_type_data unless grep{$_ eq $annot_type_data} @{$result_hash{'neXtProt_'.$annot_type}};
     }
     else {
-      # $result_hash{'neXtProt_'.$annot_type} = $start_pos.','.$end_pos.','.$data;
       my @list_of_data;
       push @list_of_data, $start_pos.','.$end_pos.','.$data;
       $result_hash{'neXtProt_'.$annot_type} = \@list_of_data;
     }
   }
 
-  foreach my $key (keys %result_hash) {
-    my $data_to_return = $result_hash{$key};
-    my $join_data = join('|', @$data_to_return);
-    $result_hash_final{$key} = $join_data;
-    # print $key, " -> ", $join_data, "\n";
+  my @keys;
+  if($self->{max_set}) {
+    @keys = keys %$max_set_output;
+  }
+  elsif($self->{config_data}) {
+    @keys = keys $self->{config_data_hash};
+  }
+  else {
+    @keys = keys %$default_output;
   }
 
-  # foreach my $key (keys %$default_output) {
-  #   if($result_hash{$key}) {
-  #     my $data_to_return = $result_hash{$key};
-  #     my $join_data = join('|', @$data_to_return);
-  #     $result_hash_final{$key} = $join_data;
-  #   }
-  #   else {
-  #     $result_hash_final{$key} = '-';
-  #   }
-  # }
+  foreach my $key (@keys) {
+    if($result_hash{$key}) {
+      my $data_to_return = $result_hash{$key};
+      my $join_data = join('|', @$data_to_return);
+      $result_hash_final{$key} = $join_data;
+    }
+    else {
+      $result_hash_final{$key} = '-';
+    }
+  }
 
   return \%result_hash_final;
 }
@@ -225,6 +293,37 @@ sub get_sparql_query {
                } order by ?spos";
 
   return $query;
+}
+
+sub build_data_hash {
+  my $self = shift;
+  my $file = '/homes/dlemos/VEP_plugins/neXtProt_headers.txt';
+
+  my %headers_file_hash;
+  my %output_hash;
+
+  if (! -e $file) {
+    die ("ERROR: neXtProt_headers file is not available.");
+  } else {
+    open FILE, $file;
+    while(<FILE>) {
+      chomp;
+      my ($value, $description) = split(/\t/, $_);
+      die ("ERROR: neXtProt value is missing from file.") if(!$value);
+      $headers_file_hash{$value} = $description;
+    }
+    close FILE;
+  }
+
+  my @data_from_user = split(/[\;\&\|]/, $self->{config_data});
+  foreach my $dfu (@data_from_user) {
+    if($headers_file_hash{$dfu}) {
+      $self->{config_data_hash}->{'neXtProt_' . $dfu} = $headers_file_hash{$dfu};
+    }
+    else {
+      die ("ERROR: $dfu is not available in neXtProt. Check file 'neXtProt_headers.txt' to see the data that is valid to query.\n");
+    }
+  }
 }
 
 1;
