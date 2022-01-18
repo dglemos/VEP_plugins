@@ -983,7 +983,7 @@ my $VEP_PLUGIN_CONFIG = {
     # Only available for GRCh37
     {
       "key" => "LOEUF",
-      "helptip" => "LOEUF stands for the "loss-of-function observed/expected upper bound fraction. This plugin adds constraint scores derived from gnomAD to VEP",
+      "helptip" => "LOEUF stands for the loss-of-function observed/expected upper bound fraction. This plugin adds constraint scores derived from gnomAD to VEP",
       "available" => 0,
       "enabled" => 0,
       "section" => "Pathogenicity predictions",
@@ -995,6 +995,21 @@ my $VEP_PLUGIN_CONFIG = {
       "params"  => [
         # "/path/to/loeuf_dataset.gz",
         "@*"
+      ]
+    },
+
+    # UTRannotator
+    # See https://github.com/ImperialCardioGenetics/UTRannotator for details
+    {
+      "key" => "UTRannotator",
+      "helptip" => "Annotates the effect of 5' UTR variant especially for variant creating/disrupting upstream ORFs",
+      "available" => 0,
+      "enabled" => 0,
+      "section" => "Pathogenicity predictions",
+      "plugin_url" => "https://raw.githubusercontent.com/ImperialCardioGenetics/UTRannotator/master/UTRannotator.pm",
+      "requires_data" => 1,
+      "params" => [
+        # "path/to/uORF_5UTR_GRCh38_PUBLIC.txt"
       ]
     },
 
