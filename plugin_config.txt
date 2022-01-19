@@ -1003,7 +1003,7 @@ my $VEP_PLUGIN_CONFIG = {
     {
       "key" => "UTRannotator",
       "helptip" => "Annotates high-impact five prime UTR variants either creating new upstream ORFs or disrupting existing upstream ORFs",
-      "available" => 1,
+      "available" => 0,
       "enabled" => 0,
       "section" => "Pathogenicity predictions",
       "plugin_url" => "https://raw.githubusercontent.com/ImperialCardioGenetics/UTRannotator/master/UTRannotator.pm",
