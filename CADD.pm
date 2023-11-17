@@ -191,16 +191,8 @@ sub run {
   if ($bvf->isa("Bio::EnsEMBL::Variation::VariationFeature")){
     $start = $bvf->{start};
     $end = $bvf->{end};
-    $allele = $bvf->alt_alleles->[$ALT_NUM];
+    $allele = $tva->base_variation_feature->alt_alleles;
     $ref = $bvf->ref_allele_string;
-
-    if (($ALT_NUM + 1) == scalar(@{$bvf->alt_alleles})) {
-      $ALT_NUM = 0;
-    } else {
-      $ALT_NUM += 1;
-    };
-
-    return {} unless $allele =~ /^[ACGT-]+$/;
 
   } else {
     $start = $bvf->{start} - 1;
